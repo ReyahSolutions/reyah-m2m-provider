@@ -9,6 +9,16 @@ yarn install
 yarn build
 ```
 
+## Usage
+
+```javascript
+import Reyah from '@reyah/api-sdk';
+import M2MAuthProvider from '@reyah/m2m-auth-provider';
+
+const provider = new M2MAuthProvider('client_id', 'client_secret', ['optional scopes']);
+Reyah.Auth.getInstance().useAuthProvider(provider);
+```
+
 ## Docs
 The documentation is generated with Typedoc.
 
