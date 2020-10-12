@@ -20,6 +20,10 @@
     "form-data": "^3.0.0",
     "node-localstorage": "^2.1.6"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": false,
   "devDependencies": {
     "@reyah/api-sdk": "^1.0.5",
     "@types/node-localstorage": "^1.3.0",
