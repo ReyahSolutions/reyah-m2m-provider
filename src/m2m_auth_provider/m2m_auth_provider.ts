@@ -192,9 +192,9 @@ export default class M2MAuthProvider implements AuthProvider {
      * @return Function to execute when the token got refreshed
      * @private
      */
-    private onTokenRefreshed(resolve: () => void, reject: (e?: any) => void, timoutRef: number): (succeeded: boolean, err: any) => void {
+    private onTokenRefreshed(resolve: () => void, reject: (e?: any) => void, timoutRef: NodeJS.Timeout): (succeeded: boolean, err: any) => void {
         return (succeeded: boolean, err: any) => {
-            window.clearTimeout(timoutRef);
+            clearTimeout(timoutRef);
             if (succeeded) {
                 resolve();
             } else {
@@ -209,7 +209,7 @@ export default class M2MAuthProvider implements AuthProvider {
      */
     private waitRefreshToken(): Promise<void> {
         return new Promise((resolve, reject) => {
-            const timeoutRef = window.setTimeout(() => {
+            const timeoutRef = setTimeout(() => {
                 reject(new AuthenticationException('Timeout while waiting new token'));
             }, 10000);
             this.internalEmitter.once(InternalEmitter.ON_TOKEN_GENERATED, this.onTokenRefreshed(resolve, reject, timeoutRef));
