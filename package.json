@@ -1,7 +1,7 @@
 {
   "name": "@reyah/m2m-auth-provider",
   "description": "Reyah SDK M2M authentication provider",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "./dist/bundle.min.js",
   "types": "./dist/index.d.ts",
   "repository": "git@git.reyah.ga:reyah/libraries/reyah-m2m-provider.git",

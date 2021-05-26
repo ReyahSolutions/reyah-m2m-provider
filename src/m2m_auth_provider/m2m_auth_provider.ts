@@ -8,8 +8,9 @@ import {
 } from '@reyah/api-sdk';
 import Axios, { AxiosInstance } from 'axios';
 import FormData from 'form-data';
-import { Storage } from './storage';
+import { InternalEmitter } from './emitter';
 import NodeStorage from './node_storage';
+import { Storage } from './storage';
 import TokenManager from './tokenManager';
 import { OAuthException, TokenException } from './error';
 
@@ -48,6 +49,16 @@ export default class M2MAuthProvider implements AuthProvider {
     private readonly scopes: string[];
 
     /**
+     * Indicates whether there is a refresh in progress
+     */
+    private refreshInProgress: boolean;
+
+    /**
+     * Internal emitter for communication between multiple "thread"
+     */
+    private readonly internalEmitter: InternalEmitter;
+
+    /**
      * @param clientId Client ID is the id of your OAuth client (should be a number)
      * @param clientSecret Client secret is the secret of your OAuth client
      * @param scopes An optional list of scope (read the Reyah API documentation for more information)
@@ -64,6 +75,8 @@ export default class M2MAuthProvider implements AuthProvider {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.scopes = scopes;
+        this.refreshInProgress = false;
+        this.internalEmitter = new InternalEmitter();
     }
 
     /**
@@ -144,7 +157,7 @@ export default class M2MAuthProvider implements AuthProvider {
      * @throws *TokenException* If an error happened with the OAuth server
      * @throws *OAuthException* If an unknown error happened while communicating with the OAuth server
      */
-    private async getFreshToken(): Promise<void> {
+    private async executeRefreshRequest(): Promise<void> {
         try {
             const data = new FormData();
             data.append('grant_type', 'client_credentials');
@@ -156,8 +169,12 @@ export default class M2MAuthProvider implements AuthProvider {
             const { data: token } = await this.requester.post('/oauth2/token', data, {
                 headers: data.getHeaders(),
             });
+            this.internalEmitter.emit(InternalEmitter.ON_TOKEN_GENERATED, true);
+            this.refreshInProgress = false;
             this.tokenManager.setToken(token);
         } catch (e) {
+            this.internalEmitter.emit(InternalEmitter.ON_TOKEN_GENERATED, false, e);
+            this.refreshInProgress = false;
             const body = e.response?.data;
             if (body) {
                 throw new TokenException(body.error, body.error_description, body.error_hint);
@@ -165,5 +182,49 @@ export default class M2MAuthProvider implements AuthProvider {
                 throw new OAuthException();
             }
         }
+    }
+
+    /**
+     * Return a function executed when a token got refreshed
+     * @param resolve Promise to resolve
+     * @param reject Promise to reject
+     * @param timoutRef Timeout ref to cancel
+     * @return Function to execute when the token got refreshed
+     * @private
+     */
+    private onTokenRefreshed(resolve: () => void, reject: (e?: any) => void, timoutRef: NodeJS.Timeout): (succeeded: boolean, err: any) => void {
+        return (succeeded: boolean, err: any) => {
+            clearTimeout(timoutRef);
+            if (succeeded) {
+                resolve();
+            } else {
+                reject(err);
+            }
+        };
+    }
+
+    /**
+     * Listen the internal emitter and wait for a new fresh token
+     * @private
+     */
+    private waitRefreshToken(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const timeoutRef = setTimeout(() => {
+                reject(new AuthenticationException('Timeout while waiting new token'));
+            }, 10000);
+            this.internalEmitter.once(InternalEmitter.ON_TOKEN_GENERATED, this.onTokenRefreshed(resolve, reject, timeoutRef));
+        });
+    }
+
+    /**
+     * Start a new token request or wait new token if a request is already in progress
+     * @private
+     */
+    private async getFreshToken(): Promise<void> {
+        if (this.refreshInProgress) {
+            return this.waitRefreshToken();
+        }
+        this.refreshInProgress = true;
+        return this.executeRefreshRequest();
     }
 }
